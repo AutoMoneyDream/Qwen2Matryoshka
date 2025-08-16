@@ -6,6 +6,30 @@ Contains all hyperparameters and model configurations.
 import torch
 from typing import List, Optional
 from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _detect_attention_implementation():
+    """
+    Detect the best available attention implementation.
+    Priority: flash_attention_2 > sdpa > eager
+    """
+    try:
+        import flash_attn
+        logger.info("Flash Attention 2 detected and available")
+        return "flash_attention_2"
+    except ImportError:
+        pass
+    
+    # Check if SDPA is available (PyTorch 2.0+)
+    if hasattr(torch.nn.functional, 'scaled_dot_product_attention'):
+        logger.info("Using PyTorch native SDPA (scaled_dot_product_attention)")
+        return "sdpa"
+    
+    logger.info("Using eager attention implementation (fallback)")
+    return "eager"
 
 
 @dataclass
@@ -99,13 +123,18 @@ class TrainingConfig:
     # Qwen2.5-VL specific parameters
     trust_remote_code: bool = True  # Required for Qwen models
     torch_dtype: str = "bfloat16"  # Recommended dtype for Qwen2.5-VL
-    attn_implementation: str = "flash_attention_2"  # Use flash attention for efficiency
+    attn_implementation: str = "auto"  # Auto-detect best available attention implementation
     
     def __post_init__(self):
         """Post-initialization to set default values."""
         if self.mrl_dims is None:
             # Updated MRL dimensions for Qwen2.5-VL
             self.mrl_dims = [256, 512, 1024, 2048, self.embedding_dim]
+        
+        # Auto-detect attention implementation if set to "auto"
+        if self.attn_implementation == "auto":
+            self.attn_implementation = _detect_attention_implementation()
+            logger.info(f"Auto-detected attention implementation: {self.attn_implementation}")
         
         # Ensure checkpoint directory exists
         import os

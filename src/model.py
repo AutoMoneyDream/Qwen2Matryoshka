@@ -33,14 +33,30 @@ class MultimodalEncoder(nn.Module):
         # Load pretrained Qwen2.5-VL model and processor
         logger.info(f"Loading Qwen2.5-VL model from {self.config.model_path}")
         
-        # Load model with optimized settings
-        self.model = Qwen2VLForConditionalGeneration.from_pretrained(
-            self.config.model_path,
-            torch_dtype=getattr(torch, self.config.torch_dtype),
-            device_map="auto" if torch.cuda.is_available() else None,
-            trust_remote_code=self.config.trust_remote_code,
-            attn_implementation=self.config.attn_implementation,
-        )
+        # Load model with optimized settings and fallback mechanism
+        try:
+            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                self.config.model_path,
+                torch_dtype=getattr(torch, self.config.torch_dtype),
+                device_map="auto" if torch.cuda.is_available() else None,
+                trust_remote_code=self.config.trust_remote_code,
+                attn_implementation=self.config.attn_implementation,
+            )
+            logger.info(f"Model loaded successfully with {self.config.attn_implementation} attention")
+        except Exception as e:
+            logger.warning(f"Failed to load model with {self.config.attn_implementation} attention: {e}")
+            logger.info("Falling back to eager attention implementation")
+            
+            # Fallback to eager attention
+            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+                self.config.model_path,
+                torch_dtype=getattr(torch, self.config.torch_dtype),
+                device_map="auto" if torch.cuda.is_available() else None,
+                trust_remote_code=self.config.trust_remote_code,
+                attn_implementation="eager",
+            )
+            self.config.attn_implementation = "eager"
+            logger.info("Model loaded successfully with eager attention (fallback)")
         
         # Load processor
         self.processor = Qwen2VLProcessor.from_pretrained(

@@ -7,10 +7,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import (
-    Qwen2VLForConditionalGeneration,
-    Qwen2VLProcessor,
+    AutoModel,
     AutoProcessor,
-    AutoModelForCausalLM
+    AutoConfig
 )
 from typing import Dict, List, Optional, Tuple, Union
 import math
@@ -35,7 +34,7 @@ class MultimodalEncoder(nn.Module):
         
         # Load model with optimized settings and fallback mechanism
         try:
-            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+            self.model = AutoModel.from_pretrained(
                 self.config.model_path,
                 torch_dtype=getattr(torch, self.config.torch_dtype),
                 device_map="auto" if torch.cuda.is_available() else None,
@@ -48,7 +47,7 @@ class MultimodalEncoder(nn.Module):
             logger.info("Falling back to eager attention implementation")
             
             # Fallback to eager attention
-            self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+            self.model = AutoModel.from_pretrained(
                 self.config.model_path,
                 torch_dtype=getattr(torch, self.config.torch_dtype),
                 device_map="auto" if torch.cuda.is_available() else None,
@@ -59,7 +58,7 @@ class MultimodalEncoder(nn.Module):
             logger.info("Model loaded successfully with eager attention (fallback)")
         
         # Load processor
-        self.processor = Qwen2VLProcessor.from_pretrained(
+        self.processor = AutoProcessor.from_pretrained(
             self.config.model_path,
             trust_remote_code=self.config.trust_remote_code
         )
@@ -154,7 +153,7 @@ class MultimodalEncoder(nn.Module):
         """
         # Forward pass through the model
         with torch.cuda.amp.autocast(enabled=self.config.mixed_precision):
-            outputs = self.model.model(**inputs, output_hidden_states=True)
+            outputs = self.model(**inputs, output_hidden_states=True)
         
         # Get last hidden states
         last_hidden_states = outputs.hidden_states[-1]  # [batch_size, seq_len, hidden_size]

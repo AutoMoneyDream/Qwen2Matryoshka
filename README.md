@@ -1,101 +1,126 @@
-# HRPROJ - 视觉语言模型训练
+# Qwen2Matryoshka: Multimodal Search Alignment with Matryoshka Embeddings
 
-这是一个使用Qwen-VL（一种强大的视觉语言模型）对自定义数据集进行微调的项目。该项目利用PEFT（参数高效微调）和LoRA（低秩适应）等技术，以高效地训练模型。
+This project provides a state-of-the-art training framework for building a powerful multimodal search alignment model. It leverages the **Qwen2.5-VL** large vision-language model and implements **Matryoshka Representation Learning (MRL)** to produce highly efficient, multi-granularity embeddings.
 
-## 安装
+The resulting model can understand and encode both text and visual data (videos/images) into a shared semantic space, making it ideal for tasks like cross-modal retrieval, search intent alignment, and recommendation systems. The Matryoshka embeddings allow for flexible, adaptive performance at inference time, where shorter embedding vectors can be used for faster, lower-cost operations without significant accuracy loss.
 
-1.  克隆代码库：
+## ✨ Core Features
+
+- **Powerful Backbone**: Built on the state-of-the-art **Qwen2.5-VL-3B-Instruct** model for robust multimodal understanding.
+- **Matryoshka Representation Learning (MRL)**: Trains nested embeddings at multiple dimensions (e.g., 256, 512, 1024, 2048) simultaneously from a single model, enabling adaptive inference performance.
+- **In-Batch Contrastive Loss**: Employs an efficient in-batch negative sampling strategy for contrastive learning, with a symmetric query-to-target and target-to-query loss.
+- **Advanced Optimizations**:
+    - **Flash Attention 2**: Integrated for faster and more memory-efficient attention computation.
+    - **Mixed Precision Training**: Supports Automatic Mixed Precision (AMP) with `bfloat16` for significant training speedup and reduced memory footprint.
+    - **Distributed Training**: Full support for Distributed Data Parallel (DDP) to scale training across multiple GPUs.
+    - **Parameter-Efficient Fine-Tuning (PEFT)**: Optional support for **LoRA** to fine-tune the model with a fraction of the memory and computational cost.
+- **Flexible & Configurable**: A centralized configuration file (`src/config.py`) allows for easy management of all hyperparameters, paths, and training settings.
+- **Monitoring**: Integrated support for **TensorBoard** and **Weights & Biases (W&B)** for real-time monitoring of training progress, losses, and other metrics.
+
+## 📁 File Structure
+
+```
+Qwen2Matryoshka/
+├───data/
+│   ├───train_data.jsonl      # Training pairs (query-target)
+│   └───video_meta.jsonl      # Metadata for video/image content
+├───checkpoints/              # Directory for saving model checkpoints
+├───logs/                     # Directory for TensorBoard logs
+├───src/
+│   ├───config.py             # Centralized configuration for all parameters
+│   ├───data_loader.py        # Multimodal dataset and dataloader implementation
+│   ├───model.py              # Qwen2.5-VL model wrapper and MRL loss function
+│   ├───train.py              # Core training and evaluation pipeline
+│   └───optimization.py       # (Implicit) SOTA optimization utilities
+├───requirements.txt          # Python dependencies
+└───train_runner.py           # Main script to launch advanced training
+└───train_example.py          # A simple script to test the pipeline
+```
+
+## ⚙️ Installation
+
+1.  **Clone the repository**:
     ```bash
-    git clone <repository-url>
-    cd HRPROJ
+    git clone <your-repo-url>
+    cd Qwen2Matryoshka
     ```
 
-2.  安装所需的依赖项：
+2.  **Install dependencies**:
+    It is highly recommended to use a virtual environment.
     ```bash
     pip install -r requirements.txt
     ```
+    *Note: `flash-attn` is commented out in `requirements.txt`. For maximum performance on compatible hardware (NVIDIA Ampere/Hopper GPUs), install it manually.*
 
-## 数据
+## 📊 Data Preparation
 
-该项目使用两个主要的数据文件：
+The model expects two main data files in the `data/` directory:
 
-*   `data/video_meta.jsonl`: 包含视频元数据。
-*   `data/train_data.jsonl`: 包含训练数据，每个条目都是一个JSON对象，其中包含图像或视频帧的引用以及相关的文本描述。
-
-请确保这些文件存在于`data`目录中，然后再开始训练。
-
-## 配置
-
-训练配置在`src/config.py`文件中定义。您可以修改此文件以更改超参数、模型路径、数据路径和其他设置。
-
-关键配置选项：
-
-*   `model_path`: 预训练Qwen-VL模型的路径。
-*   `data_path`: 训练数据的路径。
-*   `meta_path`: 元数据文件的路径。
-*   `output_dir`: 保存检查点和日志的目录。
-*   `batch_size`: 训练的批量大小。
-*   `learning_rate`: 优化器的学习率。
-*   `epochs`: 训练的轮数。
-
-## 用法
-
-要开始训练，请运行`train_runner.py`脚本：
-
-```bash
-python train_runner.py
-```
-
-该脚本将初始化配置、数据加载器、模型和训练器，并开始训练过程。
-
-## 项目结构
-
-```
-HRPROJ/
-├───.gitignore
-├───implement_plan.md
-├───MODEL_STEP3_README.md
-├───README.md
-├───README_TRAINING.md
-├───requirements.txt
-├───train_example.py
-├───train_runner.py
-├───.claude/
-│   └───settings.local.json
-├───.git/...
-├───checkpoints/
-├───data/
-│   ├───train_data.jsonl
-│   └───video_meta.jsonl
-├───logs/
-│   └───run_1755325661/
-│       └───events.out.tfevents.1755325661.yudeMac-mini.16052.0
-└───src/
-    ├───__init__.py
-    ├───config.py
-    ├───data_loader.py
-    ├───model.py
-    ├───optimization.py
-    ├───test_model.py
-    ├───train.py
-    └───__pycache__/
-```
-
-## 监控
-
-该项目支持使用TensorBoard和Weights & Biases（WandB）进行训练监控。
-
-*   **TensorBoard**: 日志保存在`logs`目录中。要启动TensorBoard，请运行：
-    ```bash
-    tensorboard --logdir logs
+1.  `train_data.jsonl`: Contains the query-target pairs for training. Each line is a JSON object.
+    ```json
+    {"query": "a user's search query", "target": "a relevant text document"}
+    {"query": "find videos of cats playing piano", "target": "video_id_123"}
+    {"query": "video_id_456", "target": "video_id_789"}
     ```
 
-*   **Weights & Biases**: 如果在`src/config.py`中启用了WandB，训练运行将自动记录到您的WandB帐户中。
+2.  `video_meta.jsonl`: Contains metadata for video/image content. The `data_loader` uses this file to look up video IDs and retrieve their associated text (title, description, OCR, etc.) and a representative image frame.
+    ```json
+    {"video_id": "video_id_123", "title": "Cat Playing Piano", "caption": "My cat plays a beautiful melody.", "images": ["path/to/frame.jpg"], "ocr": "text found in video", "asr": "audio transcript"}
+    ```
 
-## 贡献
+If these files are not found, the training script will automatically generate a small sample dataset for demonstration purposes.
 
-欢迎贡献！如果您想为此项目做贡献，请fork代码库并提交拉取请求。
+## 🚀 How to Train
 
-## 许可证
+The project provides two main scripts for training. All configurations can be adjusted in `src/config.py`.
 
-该项目根据MIT许可证授权。有关更多信息，请参阅`LICENSE`文件。
+### 1. Simple Example (Recommended for a first run)
+
+This script runs a minimal training loop on a tiny, auto-generated dataset to verify that the environment and pipeline are working correctly.
+
+```bash
+python train_example.py
+```
+
+### 2. Advanced Training
+
+This is the main script for running a full training session with all advanced features.
+
+**Basic Training on a Single GPU:**
+```bash
+python train_runner.py \
+    --batch_size 16 \
+    --learning_rate 5e-5 \
+    --num_epochs 10 \
+    --mixed_precision \
+    --use_tensorboard \
+    --experiment_name "qwen2.5-mrl-run-1"
+```
+
+**Distributed Training on Multiple GPUs:**
+To run on 4 GPUs, for example:
+```bash
+python train_runner.py \
+    --distributed \
+    --world_size 4 \
+    --batch_size 32
+```
+
+**Parameter-Efficient Fine-Tuning (PEFT) with LoRA:**
+This is ideal for training on hardware with limited memory.
+```bash
+python train_runner.py \
+    --use_lora \
+    --freeze_backbone \
+    --batch_size 8
+```
+
+## 📈 Monitoring
+
+You can monitor the training process using TensorBoard:
+
+```bash
+tensorboard --logdir logs
+```
+
+Navigate to `http://localhost:6006` in your browser to view real-time graphs of the training loss, accuracy, learning rate, and other metrics. If you enable Weights & Biases in the config, logs will be automatically synced to your W&B account.

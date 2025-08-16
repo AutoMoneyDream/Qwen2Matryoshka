@@ -5,6 +5,7 @@ data/
 *.tsv
 *.parquet
 *.feather
+*.env
 
 # Model checkpoints and weights
 checkpoints/

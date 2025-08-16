@@ -152,7 +152,7 @@ class MultimodalEncoder(nn.Module):
             features: [batch_size, hidden_size]
         """
         # Forward pass through the model
-        with torch.cuda.amp.autocast(enabled=self.config.mixed_precision):
+        with torch.amp.autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu', enabled=self.config.mixed_precision):
             outputs = self.model(**inputs, output_hidden_states=True)
         
         # Get last hidden states

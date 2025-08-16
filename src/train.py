@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 
 from tqdm import tqdm
 import wandb
@@ -66,7 +66,7 @@ class Trainer:
         self._setup_monitoring()
         
         # Mixed precision training
-        self.scaler = GradScaler(enabled=self.config.mixed_precision)
+        self.scaler = GradScaler(enabled=self.config.mixed_precision and self.config.use_grad_scaler)
         
         # Gradient accumulation
         self.accumulation_steps = self.config.gradient_accumulation_steps
@@ -74,8 +74,10 @@ class Trainer:
     def _setup_distributed(self) -> bool:
         """Setup distributed training if available."""
         if 'RANK' in os.environ:
-            dist.init_process_group(backend='nccl')
-            torch.cuda.set_device(int(os.environ['LOCAL_RANK']))
+            backend = 'nccl' if torch.cuda.is_available() else 'gloo'
+            dist.init_process_group(backend=backend)
+            if torch.cuda.is_available():
+                torch.cuda.set_device(int(os.environ['LOCAL_RANK']))
             return True
         return False
     
@@ -104,7 +106,8 @@ class Trainer:
         random.seed(self.config.seed)
         np.random.seed(self.config.seed)
         torch.manual_seed(self.config.seed)
-        torch.cuda.manual_seed_all(self.config.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.config.seed)
         
         # Ensure deterministic behavior
         if self.config.deterministic:
@@ -301,7 +304,7 @@ class Trainer:
                 target_inputs = move_to_device(batch['target_inputs'])
                 
                 # Forward pass with mixed precision
-                with autocast(enabled=self.config.mixed_precision):
+                with autocast(self.device.type, enabled=self.config.mixed_precision):
                     query_embeddings, target_embeddings = self.model(query_inputs, target_inputs)
                     
                     # Compute loss
@@ -417,7 +420,7 @@ class Trainer:
                 target_inputs = move_to_device(batch['target_inputs'])
                 
                 # Forward pass
-                with autocast(enabled=self.config.mixed_precision):
+                with autocast(self.device.type, enabled=self.config.mixed_precision):
                     query_embeddings, target_embeddings = self.model(query_inputs, target_inputs)
                     loss = self.mrl_loss_fn(query_embeddings, target_embeddings)
                 

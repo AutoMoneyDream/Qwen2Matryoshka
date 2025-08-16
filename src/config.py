@@ -86,6 +86,7 @@ class TrainingConfig:
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     mixed_precision: bool = True  # Use automatic mixed precision
     gradient_accumulation_steps: int = 1
+    use_grad_scaler: bool = True  # Whether to use GradScaler (disable for BFloat16 compatibility)
     
     # Logging and saving
     logging_steps: int = 50
@@ -135,6 +136,12 @@ class TrainingConfig:
         if self.attn_implementation == "auto":
             self.attn_implementation = _detect_attention_implementation()
             logger.info(f"Auto-detected attention implementation: {self.attn_implementation}")
+        
+        # Disable GradScaler for BFloat16 to avoid compatibility issues
+        if self.torch_dtype == "bfloat16" and self.use_grad_scaler:
+            logger.warning("BFloat16 detected. Disabling GradScaler for compatibility.")
+            logger.warning("Mixed precision will still be used, but without gradient scaling.")
+            self.use_grad_scaler = False
         
         # Ensure checkpoint directory exists
         import os

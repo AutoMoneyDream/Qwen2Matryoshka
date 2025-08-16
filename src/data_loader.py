@@ -246,7 +246,8 @@ def collate_fn(batch: List[Dict[str, Any]], config) -> Dict[str, Any]:
     
     # Use processor to encode queries and targets
     try:
-        query_inputs = processor.apply_chat_template(
+        # Process queries with chat template
+        query_text_inputs = processor.apply_chat_template(
             query_messages,
             tokenize=True,
             add_generation_prompt=False,
@@ -256,7 +257,8 @@ def collate_fn(batch: List[Dict[str, Any]], config) -> Dict[str, Any]:
             max_length=config.max_text_length
         )
         
-        target_inputs = processor.apply_chat_template(
+        # Process targets with chat template
+        target_text_inputs = processor.apply_chat_template(
             target_messages,
             tokenize=True,
             add_generation_prompt=False,
@@ -265,6 +267,38 @@ def collate_fn(batch: List[Dict[str, Any]], config) -> Dict[str, Any]:
             truncation=True,
             max_length=config.max_text_length
         )
+        
+        # Create proper input dictionaries
+        query_inputs = {
+            'input_ids': query_text_inputs,
+            'attention_mask': (query_text_inputs != processor.tokenizer.pad_token_id).long()
+        }
+        
+        target_inputs = {
+            'input_ids': target_text_inputs,
+            'attention_mask': (target_text_inputs != processor.tokenizer.pad_token_id).long()
+        }
+        
+        # Add pixel values for images if present
+        query_images_filtered = [img for img in query_images if img is not None]
+        target_images_filtered = [img for img in target_images if img is not None]
+        
+        if query_images_filtered:
+            query_vision_inputs = processor(
+                images=query_images_filtered,
+                return_tensors="pt"
+            )
+            if 'pixel_values' in query_vision_inputs:
+                query_inputs['pixel_values'] = query_vision_inputs['pixel_values']
+        
+        if target_images_filtered:
+            target_vision_inputs = processor(
+                images=target_images_filtered,
+                return_tensors="pt"
+            )
+            if 'pixel_values' in target_vision_inputs:
+                target_inputs['pixel_values'] = target_vision_inputs['pixel_values']
+                
     except Exception as e:
         print(f"Warning: Error in processor.apply_chat_template: {e}")
         # Fallback to simple text processing

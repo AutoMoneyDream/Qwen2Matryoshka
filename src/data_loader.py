@@ -21,17 +21,18 @@ class MultimodalDataset(Dataset):
     Supports four combinations: text-text, text-video, video-text, video-video.
     """
     
-    def __init__(self, data_path: str, video_meta_path: str, processor: Qwen2VLProcessor):
+    def __init__(self, data_path: str, video_meta_path: str, config=None, split='train'):
         """
         Initialize the multimodal dataset.
         
         Args:
             data_path: Path to the query-target pairs data (JSONL format)
             video_meta_path: Path to the video metadata (JSONL format)
-            processor: Qwen2VL processor for text and image preprocessing
+            config: Configuration object
+            split: Dataset split ('train', 'eval', 'test')
         """
-        self.processor = processor
-        self.config = get_config()
+        self.config = config or get_config()
+        self.split = split
         
         # Load query-target pairs
         self.data = []
@@ -171,18 +172,23 @@ class MultimodalDataset(Dataset):
         return False
 
 
-def collate_fn(batch: List[Dict[str, Any]], processor: Qwen2VLProcessor) -> Dict[str, Any]:
+def collate_fn(batch: List[Dict[str, Any]], config) -> Dict[str, Any]:
     """
     Custom collate function for batching multimodal data.
     
     Args:
         batch: List of data items from __getitem__
-        processor: Qwen2VL processor for encoding
+        config: Configuration object containing processor
         
     Returns:
         Batched and processed data ready for model input
     """
-    config = get_config()
+    # Load processor from config
+    from transformers import Qwen2VLProcessor
+    processor = Qwen2VLProcessor.from_pretrained(
+        config.model_path,
+        trust_remote_code=config.trust_remote_code
+    )
     
     # Separate query and target data
     query_texts = []
@@ -281,37 +287,33 @@ def collate_fn(batch: List[Dict[str, Any]], processor: Qwen2VLProcessor) -> Dict
         )
     
     return {
-        'query_input': query_inputs,
-        'target_input': target_inputs,
+        'query_inputs': query_inputs,
+        'target_inputs': target_inputs,
         'batch_size': len(batch)
     }
 
 
 def create_dataloader(
-    data_path: str,
-    video_meta_path: str,
-    processor: Qwen2VLProcessor,
+    dataset: MultimodalDataset,
     batch_size: Optional[int] = None,
     shuffle: Optional[bool] = None,
-    num_workers: Optional[int] = None
+    num_workers: Optional[int] = None,
+    distributed: bool = False
 ) -> DataLoader:
     """
     Create a DataLoader for multimodal data.
     
     Args:
-        data_path: Path to query-target pairs data
-        video_meta_path: Path to video metadata
-        processor: Qwen2VL processor
+        dataset: MultimodalDataset instance
         batch_size: Batch size (uses config default if None)
         shuffle: Whether to shuffle data (uses config default if None)
         num_workers: Number of worker processes (uses config default if None)
+        distributed: Whether to use distributed training
         
     Returns:
         Configured DataLoader instance
     """
-    config = get_config()
-    
-    dataset = MultimodalDataset(data_path, video_meta_path, processor)
+    config = dataset.config
     
     # Use config defaults if not specified
     if batch_size is None:
@@ -321,13 +323,21 @@ def create_dataloader(
     if num_workers is None:
         num_workers = config.num_workers
     
+    # Setup distributed sampler if needed
+    sampler = None
+    if distributed:
+        from torch.utils.data.distributed import DistributedSampler
+        sampler = DistributedSampler(dataset, shuffle=shuffle)
+        shuffle = False  # sampler handles shuffling in distributed mode
+    
     def collate_wrapper(batch):
-        return collate_fn(batch, processor)
+        return collate_fn(batch, dataset.config)
     
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
+        sampler=sampler,
         num_workers=num_workers,
         pin_memory=config.pin_memory,
         collate_fn=collate_wrapper,

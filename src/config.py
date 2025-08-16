@@ -21,21 +21,42 @@ class TrainingConfig:
     
     # Data paths
     data_path: str = "data/train_data.jsonl"
+    train_data_path: str = "data/train_data.jsonl"
+    eval_data_path: Optional[str] = None  # Optional evaluation data
     video_meta_path: str = "data/video_meta.jsonl"
     checkpoint_dir: str = "checkpoints"
+    log_dir: str = "logs"
     
     # Training hyperparameters
     learning_rate: float = 5e-5
     batch_size: int = 8
+    eval_batch_size: int = 16
     num_epochs: int = 10
     weight_decay: float = 0.01
     warmup_steps: int = 500
+    warmup_ratio: float = 0.1
     gradient_clip_norm: float = 1.0
+    max_grad_norm: float = 1.0
+    
+    # Optimizer and scheduler
+    optimizer: str = "adamw"  # adamw, adam
+    scheduler: str = "cosine"  # cosine, linear, none
+    adam_betas: tuple = (0.9, 0.999)
+    adam_eps: float = 1e-8
+    min_lr: float = 1e-6
     
     # Matryoshka Representation Learning parameters
     mrl_dims: List[int] = None  # Will be set to [128, 256, 512, 896] if None
+    mrl_weights: Optional[List[float]] = None  # Weights for each MRL dimension
     mrl_loss_weight: float = 1.0
     temperature: float = 0.07  # Temperature for contrastive loss
+    
+    # Advanced loss functions
+    use_hard_negatives: bool = False
+    hard_negative_ratio: float = 0.3
+    hard_negative_weight: float = 0.5
+    margin: float = 0.2
+    use_multi_level_loss: bool = True
     
     # Device and optimization
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -44,9 +65,24 @@ class TrainingConfig:
     
     # Logging and saving
     logging_steps: int = 50
+    log_interval: int = 50
     save_steps: int = 1000
+    save_interval: int = 1
     eval_steps: int = 500
     save_total_limit: int = 3
+    
+    # Monitoring
+    use_wandb: bool = False
+    use_tensorboard: bool = True
+    wandb_project: str = "multimodal-search-alignment"
+    experiment_name: str = "qwen2.5-vl-mrl"
+    
+    # Reproducibility
+    seed: int = 42
+    deterministic: bool = True
+    
+    # Resume training
+    resume_from_checkpoint: Optional[str] = None
     
     # Data processing
     num_workers: int = 4

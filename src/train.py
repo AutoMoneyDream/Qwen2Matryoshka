@@ -289,8 +289,16 @@ class Trainer:
         for batch_idx, batch in enumerate(pbar):
             try:
                 # Move batch to device
-                query_inputs = {k: v.to(self.device) for k, v in batch['query_inputs'].items()}
-                target_inputs = {k: v.to(self.device) for k, v in batch['target_inputs'].items()}
+                def move_to_device(inputs):
+                    if isinstance(inputs, dict):
+                        return {k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+                    elif isinstance(inputs, torch.Tensor):
+                        return inputs.to(self.device)
+                    else:
+                        return inputs
+                
+                query_inputs = move_to_device(batch['query_inputs'])
+                target_inputs = move_to_device(batch['target_inputs'])
                 
                 # Forward pass with mixed precision
                 with autocast(enabled=self.config.mixed_precision):
@@ -397,8 +405,16 @@ class Trainer:
         for batch in pbar:
             try:
                 # Move batch to device
-                query_inputs = {k: v.to(self.device) for k, v in batch['query_inputs'].items()}
-                target_inputs = {k: v.to(self.device) for k, v in batch['target_inputs'].items()}
+                def move_to_device(inputs):
+                    if isinstance(inputs, dict):
+                        return {k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+                    elif isinstance(inputs, torch.Tensor):
+                        return inputs.to(self.device)
+                    else:
+                        return inputs
+                
+                query_inputs = move_to_device(batch['query_inputs'])
+                target_inputs = move_to_device(batch['target_inputs'])
                 
                 # Forward pass
                 with autocast(enabled=self.config.mixed_precision):

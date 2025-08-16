@@ -7,15 +7,15 @@ The resulting model can understand and encode both text and visual data (videos/
 ## ✨ Core Features
 
 - **Powerful Backbone**: Built on the state-of-the-art **Qwen2.5-VL-3B-Instruct** model for robust multimodal understanding.
-- **Matryoshka Representation Learning (MRL)**: Trains nested embeddings at multiple dimensions (e.g., 256, 512, 1024, 2048) simultaneously from a single model, enabling adaptive inference performance.
-- **In-Batch Contrastive Loss**: Employs an efficient in-batch negative sampling strategy for contrastive learning, with a symmetric query-to-target and target-to-query loss.
+- **Matryoshka Representation Learning (MRL)**: Trains nested embeddings at multiple dimensions (e.g., 256, 512, 1024, 2048) simultaneously from a single model.
+- **In-Batch Contrastive Loss**: Employs an efficient in-batch negative sampling strategy for contrastive learning.
 - **Advanced Optimizations**:
     - **Flash Attention 2**: Integrated for faster and more memory-efficient attention computation.
-    - **Mixed Precision Training**: Supports Automatic Mixed Precision (AMP) with `bfloat16` for significant training speedup and reduced memory footprint.
+    - **Mixed Precision Training**: Supports Automatic Mixed Precision (AMP) with `bfloat16` for significant training speedup.
     - **Distributed Training**: Full support for Distributed Data Parallel (DDP) to scale training across multiple GPUs.
-    - **Parameter-Efficient Fine-Tuning (PEFT)**: Optional support for **LoRA** to fine-tune the model with a fraction of the memory and computational cost.
-- **Flexible & Configurable**: A centralized configuration file (`src/config.py`) allows for easy management of all hyperparameters, paths, and training settings.
-- **Monitoring**: Integrated support for **TensorBoard** and **Weights & Biases (W&B)** for real-time monitoring of training progress, losses, and other metrics.
+    - **Parameter-Efficient Fine-Tuning (PEFT)**: Optional support for **LoRA**.
+- **Flexible & Configurable**: A centralized configuration file (`src/config.py`) allows for easy management of all hyperparameters.
+- **Monitoring**: Integrated support for **TensorBoard** and **Weights & Biases (W&B)**.
 
 ## 📁 File Structure
 
@@ -28,10 +28,10 @@ Qwen2Matryoshka/
 ├───logs/                     # Directory for TensorBoard logs
 ├───src/
 │   ├───config.py             # Centralized configuration for all parameters
-│   ├───data_loader.py        # Multimodal dataset and dataloader implementation
-│   ├───model.py              # Qwen2.5-VL model wrapper and MRL loss function
+│   ├───data_loader.py        # Multimodal dataset and dataloader
+│   ├───model.py              # Qwen2.5-VL model wrapper and MRL loss
 │   ├───train.py              # Core training and evaluation pipeline
-│   └───optimization.py       # (Implicit) SOTA optimization utilities
+│   └───optimization.py       # Optimization utilities
 ├───requirements.txt          # Python dependencies
 └───train_runner.py           # Main script to launch advanced training
 └───train_example.py          # A simple script to test the pipeline
@@ -52,27 +52,9 @@ Qwen2Matryoshka/
     ```
     *Note: `flash-attn` is commented out in `requirements.txt`. For maximum performance on compatible hardware (NVIDIA Ampere/Hopper GPUs), install it manually.*
 
-## 📊 Data Preparation
-
-The model expects two main data files in the `data/` directory:
-
-1.  `train_data.jsonl`: Contains the query-target pairs for training. Each line is a JSON object.
-    ```json
-    {"query": "a user's search query", "target": "a relevant text document"}
-    {"query": "find videos of cats playing piano", "target": "video_id_123"}
-    {"query": "video_id_456", "target": "video_id_789"}
-    ```
-
-2.  `video_meta.jsonl`: Contains metadata for video/image content. The `data_loader` uses this file to look up video IDs and retrieve their associated text (title, description, OCR, etc.) and a representative image frame.
-    ```json
-    {"video_id": "video_id_123", "title": "Cat Playing Piano", "caption": "My cat plays a beautiful melody.", "images": ["path/to/frame.jpg"], "ocr": "text found in video", "asr": "audio transcript"}
-    ```
-
-If these files are not found, the training script will automatically generate a small sample dataset for demonstration purposes.
-
 ## 🚀 How to Train
 
-The project provides two main scripts for training. All configurations can be adjusted in `src/config.py`.
+All configurations can be adjusted in `src/config.py`.
 
 ### 1. Simple Example (Recommended for a first run)
 
@@ -84,7 +66,7 @@ python train_example.py
 
 ### 2. Advanced Training
 
-This is the main script for running a full training session with all advanced features.
+This is the main script for running a full training session.
 
 **Basic Training on a Single GPU:**
 ```bash
@@ -106,15 +88,6 @@ python train_runner.py \
     --batch_size 32
 ```
 
-**Parameter-Efficient Fine-Tuning (PEFT) with LoRA:**
-This is ideal for training on hardware with limited memory.
-```bash
-python train_runner.py \
-    --use_lora \
-    --freeze_backbone \
-    --batch_size 8
-```
-
 ## 📈 Monitoring
 
 You can monitor the training process using TensorBoard:
@@ -122,5 +95,33 @@ You can monitor the training process using TensorBoard:
 ```bash
 tensorboard --logdir logs
 ```
+Navigate to `http://localhost:6006` in your browser to view real-time graphs.
 
-Navigate to `http://localhost:6006` in your browser to view real-time graphs of the training loss, accuracy, learning rate, and other metrics. If you enable Weights & Biases in the config, logs will be automatically synced to your W&B account.
+## 🔧 Troubleshooting
+
+### 1. Hugging Face HTTP 429 Error
+
+If you encounter an `HTTP Error 429 Too Many Requests` while downloading the model, it means you have been rate-limited by Hugging Face Hub. This typically happens with frequent, unauthenticated requests.
+
+**Solution**: Authenticate with a Hugging Face access token.
+
+1.  **Get a Token**: Create a new access token on the [Hugging Face website](https://huggingface.co/settings/tokens).
+2.  **Login via CLI**: Run the following command in your terminal and paste your token when prompted. This will store your token locally for future use.
+    ```bash
+    huggingface-cli login
+    ```
+    After logging in, re-run your training script.
+
+### 2. BFloat16 Mixed Precision Issues
+
+When using `bfloat16` for mixed-precision training, you might encounter compatibility errors with `GradScaler`, especially on certain hardware like AMD GPUs.
+
+**Solution**: The training script automatically handles this. The `src/config.py` file detects if `torch_dtype` is set to `"bfloat16"` and, if so, disables `GradScaler` (`use_grad_scaler = False`). Mixed precision is still used via `torch.amp.autocast`, but without gradient scaling, which is generally safe for `bfloat16` due to its larger numerical range compared to `float16`.
+
+```python
+# From src/config.py
+if self.torch_dtype == "bfloat16" and self.use_grad_scaler:
+    logger.warning("BFloat16 detected. Disabling GradScaler for compatibility.")
+    self.use_grad_scaler = False
+```
+This ensures training stability without manual intervention.
